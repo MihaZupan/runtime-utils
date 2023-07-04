@@ -7,7 +7,7 @@ git remote add other https://github.com/{{SOURCE_REPOSITORY}}
 git fetch other {{SOURCE_BRANCH}}
 git log other/{{SOURCE_BRANCH}} -1
 git switch -c pr
-git reset --hard main
+git reset --hard origin/main
 git config --global user.email build@build.foo
 git config --global user.name build
 git merge --no-edit other/{{SOURCE_BRANCH}}
