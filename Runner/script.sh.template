@@ -28,7 +28,7 @@ cp -r artifacts/bin/runtime/net8.0-linux-Release-x64/* ../artifacts-main
 cp -r artifacts/bin/coreclr/linux.x64.Checked/* ../clr-checked-main
 
 git switch pr
-./build.sh clr+libs.pretest -c Release
+./build.sh clr+libs.pretest+libs -c Release
 ./build.sh clr.jit -c Checked
 
 cp -r artifacts/bin/coreclr/linux.x64.Release/* ../artifacts-pr
