@@ -154,13 +154,27 @@ internal static class RuntimeHelpers
 
     public static async Task CopyReleaseTestAssembliesAsync(JobBase job, string branch, string destination)
     {
+        await Task.Yield();
+
         AssertIsLinux();
 
         string logPrefix = $"{branch} release";
 
-        string arch = JobBase.IsArm ? "arm64" : "x64";
+        Parallel.ForEach(Directory.GetDirectories("runtime/artifacts/tests/libraries"), dir =>
+        {
+            string name = Path.GetFileName(dir);
 
-        await job.RunProcessAsync("cp", $"-r runtime/artifacts/tests/libraries/linux.{arch}.Release/. {destination}", logPrefix: logPrefix);
+            if (name.Contains(".Tests", StringComparison.Ordinal) || name.Contains(".Test.", StringComparison.Ordinal))
+            {
+                string folder = Directory.GetDirectories(Path.Combine(dir, "Release"))
+                    .Where(dir => Path.GetFileName(dir).StartsWith("net", StringComparison.OrdinalIgnoreCase))
+                    .Single();
+
+                string dllPath = Path.Combine(folder, $"{name}.dll");
+
+                File.Copy(dllPath, Path.Combine(destination, $"{name}.dll"));
+            }
+        });
     }
 
     public static int GetDotnetVersion()
