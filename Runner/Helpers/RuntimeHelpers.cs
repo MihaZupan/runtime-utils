@@ -160,7 +160,7 @@ internal static class RuntimeHelpers
 
         string logPrefix = $"{branch} release";
 
-        Parallel.ForEach(Directory.GetDirectories("runtime/artifacts/tests/libraries"), dir =>
+        Parallel.ForEach(Directory.GetDirectories("runtime/artifacts/bin"), dir =>
         {
             string name = Path.GetFileName(dir);
 
