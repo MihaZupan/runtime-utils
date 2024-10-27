@@ -170,9 +170,10 @@ internal static class RuntimeHelpers
                     .Where(dir => Path.GetFileName(dir).StartsWith("net", StringComparison.OrdinalIgnoreCase))
                     .Single();
 
-                string dllPath = Path.Combine(folder, $"{name}.dll");
-
-                File.Copy(dllPath, Path.Combine(destination, $"{name}.dll"));
+                foreach (string dll in Directory.GetFiles(folder, "*.dll"))
+                {
+                    File.Copy(dll, Path.Combine(destination, Path.GetFileName(dll)));
+                }
             }
         });
     }
