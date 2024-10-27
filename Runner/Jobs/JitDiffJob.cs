@@ -2,10 +2,15 @@
 
 internal sealed class JitDiffJob : JobBase
 {
-    public const string DiffsDirectory = "jit-diffs/frameworks";
+    private const string TestsFlag = "tests";
+
+    public const string DiffsDirectory = "jit-diffs";
     public const string DiffsMainDirectory = $"{DiffsDirectory}/main";
     public const string DiffsPrDirectory = $"{DiffsDirectory}/pr";
     public const string DasmSubdirectory = "dasmset_1/base";
+
+    private const string DiffsLibrariesTestsMainDirectory = $"{DiffsDirectory}/libraries-tests-main";
+    private const string DiffsLibrariesTestsPrDirectory = $"{DiffsDirectory}/libraries-tests-pr";
 
     public JitDiffJob(HttpClient client, Dictionary<string, string> metadata) : base(client, metadata) { }
 
@@ -23,7 +28,7 @@ internal sealed class JitDiffJob : JobBase
 
         await RuntimeHelpers.InstallRuntimeDotnetSdkAsync(this);
 
-        string diffAnalyzeSummary = await CollectFrameworksDiffsAsync();
+        string diffAnalyzeSummary = await CollectDiffsAsync();
 
         await UploadJitDiffExamplesAsync(diffAnalyzeSummary, regressions: true);
         await UploadJitDiffExamplesAsync(diffAnalyzeSummary, regressions: false);
@@ -64,10 +69,13 @@ internal sealed class JitDiffJob : JobBase
             Directory.CreateDirectory("artifacts-pr");
             Directory.CreateDirectory("clr-checked-main");
             Directory.CreateDirectory("clr-checked-pr");
-            Directory.CreateDirectory("jit-diffs");
+            Directory.CreateDirectory("libraries-tests-main");
+            Directory.CreateDirectory("libraries-tests-pr");
             Directory.CreateDirectory(DiffsDirectory);
             Directory.CreateDirectory(DiffsMainDirectory);
             Directory.CreateDirectory(DiffsPrDirectory);
+            Directory.CreateDirectory(DiffsLibrariesTestsMainDirectory);
+            Directory.CreateDirectory(DiffsLibrariesTestsPrDirectory);
         });
 
         await createDirectoriesTask;
@@ -80,29 +88,52 @@ internal sealed class JitDiffJob : JobBase
     {
         string arch = IsArm ? "arm64" : "x64";
 
-        await job.RunProcessAsync("bash", $"build.sh clr+libs -c Release {RuntimeHelpers.LibrariesExtraBuildArgs}", logPrefix: $"{branch} release", workDir: "runtime");
+        bool diffTests = job.TryGetFlag(TestsFlag);
+        string testsSuffix = diffTests ? "+libs.tests" : string.Empty;
+
+        await job.RunProcessAsync("bash", $"build.sh clr+libs{testsSuffix} -c Release {RuntimeHelpers.LibrariesExtraBuildArgs}", logPrefix: $"{branch} release", workDir: "runtime");
 
         Task copyReleaseBitsTask = RuntimeHelpers.CopyReleaseArtifactsAsync(job, branch, $"artifacts-{branch}");
+        Task copyTestsTask = diffTests ? RuntimeHelpers.CopyReleaseTestAssembliesAsync(job, branch, $"libraries-tests-{branch}") : Task.CompletedTask;
 
         await job.RunProcessAsync("bash", "build.sh clr.jit -c Checked", logPrefix: $"{branch} checked", workDir: "runtime");
         await job.RunProcessAsync("cp", $"-r runtime/artifacts/bin/coreclr/linux.{arch}.Checked/. clr-checked-{branch}", logPrefix: $"{branch} checked");
+
+        await copyReleaseBitsTask;
+        await copyTestsTask;
 
         if (uploadArtifacts)
         {
             job.PendingTasks.Enqueue(job.ZipAndUploadArtifactAsync($"build-artifacts-{branch}", $"artifacts-{branch}"));
             job.PendingTasks.Enqueue(job.ZipAndUploadArtifactAsync($"build-clr-checked-{branch}", $"clr-checked-{branch}"));
-        }
 
-        await copyReleaseBitsTask;
+            if (diffTests)
+            {
+                job.PendingTasks.Enqueue(job.ZipAndUploadArtifactAsync($"build-libraries-tests-{branch}", $"libraries-tests-{branch}"));
+            }
+        }
     }
 
-    private async Task<string> CollectFrameworksDiffsAsync()
+    private async Task<string> CollectDiffsAsync()
     {
         try
         {
             await Task.WhenAll(
                 JitDiffUtils.RunJitDiffOnFrameworksAsync(this, "artifacts-main", "clr-checked-main", DiffsMainDirectory),
                 JitDiffUtils.RunJitDiffOnFrameworksAsync(this, "artifacts-pr", "clr-checked-pr", DiffsPrDirectory));
+
+            if (TryGetFlag(TestsFlag))
+            {
+                string[] mainDlls = Directory.GetFiles("libraries-tests-main", "*.dll");
+                string[] prDlls = Directory.GetFiles("libraries-tests-pr", "*.dll");
+
+                await Task.WhenAll(
+                    JitDiffUtils.RunJitDiffOnAssembliesAsync(this, "artifacts-main", "clr-checked-main", DiffsLibrariesTestsMainDirectory, mainDlls),
+                    JitDiffUtils.RunJitDiffOnAssembliesAsync(this, "artifacts-pr", "clr-checked-pr", DiffsLibrariesTestsPrDirectory, prDlls));
+
+                await RunProcessAsync("mv", $"-r {DiffsLibrariesTestsMainDirectory}/{DasmSubdirectory}/. {DiffsMainDirectory}/{DasmSubdirectory}");
+                await RunProcessAsync("mv", $"-r {DiffsLibrariesTestsPrDirectory}/{DasmSubdirectory}/. {DiffsPrDirectory}/{DasmSubdirectory}");
+            }
         }
         finally
         {
@@ -124,7 +155,7 @@ internal sealed class JitDiffJob : JobBase
             JitDiffUtils.ParseDiffAnalyzeEntries(diffAnalyzeSummary, regressions),
             tryGetExtraInfo: null,
             replaceMethodName: name => name,
-            maxCount: 20);
+            maxCount: 25);
 
         string changes = JitDiffUtils.GetCommentMarkdown(diffs, GitHubHelpers.CommentLengthLimit, regressions, out bool truncated);
 

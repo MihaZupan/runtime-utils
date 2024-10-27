@@ -152,6 +152,17 @@ internal static class RuntimeHelpers
         await job.RunProcessAsync("cp", $"-r {BaseDirectory}/{folder}/. {destination}", logPrefix: logPrefix);
     }
 
+    public static async Task CopyReleaseTestAssembliesAsync(JobBase job, string branch, string destination)
+    {
+        AssertIsLinux();
+
+        string logPrefix = $"{branch} release";
+
+        string arch = JobBase.IsArm ? "arm64" : "x64";
+
+        await job.RunProcessAsync("cp", $"-r runtime/artifacts/tests/libraries/linux.{arch}.Release/. {destination}", logPrefix: logPrefix);
+    }
+
     public static int GetDotnetVersion()
     {
         // "version": "10.0.100-preview.1.12345.6", => 10
