@@ -1,4 +1,7 @@
-﻿namespace Runner.Jobs;
+﻿using Azure.Storage.Blobs.Models;
+using System.IO.Compression;
+
+namespace Runner.Jobs;
 
 internal sealed class JitDiffJob : JobBase
 {
@@ -15,7 +18,11 @@ internal sealed class JitDiffJob : JobBase
 
         await CloneRuntimeAndSetupToolsAsync(this);
 
+        await TryDownloadPreviousBuildArtifactsAsync();
+
         await BuildAndCopyRuntimeBranchBitsAsync(this, "main");
+
+        await UploadBuildArtifactsAsync();
 
         await RunProcessAsync("git", "switch pr", workDir: "runtime");
 
@@ -94,6 +101,45 @@ internal sealed class JitDiffJob : JobBase
         }
 
         await copyReleaseBitsTask;
+    }
+
+    private async Task TryDownloadPreviousBuildArtifactsAsync()
+    {
+        try
+        {
+            var artifactsBlob = PersistentStateClient.GetBlobClient("runtime-artifacts-main.zip");
+            if (await artifactsBlob.ExistsAsync(JobTimeout))
+            {
+                await LogAsync($"Downloading previous artifacts ...");
+                var content = (await artifactsBlob.DownloadContentAsync(JobTimeout)).Value;
+
+                await LogAsync($"Extracting previous artifacts ({GetRoughSizeString(content.Details.ContentLength)}) ...");
+                ZipFile.ExtractToDirectory(content.Content.ToStream(), "runtime/artifacts");
+            }
+        }
+        catch (Exception ex)
+        {
+            await LogAsync($"Failed to download previous artifacts: {ex}");
+        }
+    }
+
+    private async Task UploadBuildArtifactsAsync()
+    {
+        try
+        {
+            await LogAsync($"Compressing artifacts directory ...");
+            using var ms = new MemoryStream(512 * 1024 * 1024);
+            ZipFile.CreateFromDirectory("runtime/artifacts", ms, CompressionLevel.Optimal, includeBaseDirectory: false);
+            ms.Position = 0;
+
+            await LogAsync($"Uploading artifacts directory ({GetRoughSizeString(ms.Length)}) ...");
+            var artifactsBlob = PersistentStateClient.GetBlobClient("runtime-artifacts-main.zip");
+            await artifactsBlob.UploadAsync(ms, overwrite: true, JobTimeout);
+        }
+        catch (Exception ex)
+        {
+            await LogAsync($"Failed to upload artifacts: {ex}");
+        }
     }
 
     private async Task<string> CollectFrameworksDiffsAsync()

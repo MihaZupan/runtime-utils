@@ -474,6 +474,24 @@ public abstract class JobBase
         }
     }
 
+    protected static string GetRoughSizeString(long size)
+    {
+        double kb = size / 1024d;
+        double mb = kb / 1024d;
+
+        if (mb >= 1)
+        {
+            return $"{(int)mb} MB";
+        }
+
+        if (kb >= 1)
+        {
+            return $"{(int)kb} KB";
+        }
+
+        return $"{size} B";
+    }
+
     protected int GetTotalSystemMemoryGB()
     {
         var memory = _hardwareInfo?.MemoryStatus;
