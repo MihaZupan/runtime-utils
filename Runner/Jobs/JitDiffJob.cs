@@ -125,21 +125,27 @@ internal sealed class JitDiffJob : JobBase
 
     private async Task UploadBuildArtifactsAsync()
     {
-        try
-        {
-            await LogAsync($"Compressing artifacts directory ...");
-            using var ms = new MemoryStream(512 * 1024 * 1024);
-            ZipFile.CreateFromDirectory("runtime/artifacts", ms, CompressionLevel.Optimal, includeBaseDirectory: false);
-            ms.Position = 0;
+        const string ArtifactsDirectory = "runtime-artifacts-main";
+        const string ZipFile = $"{ArtifactsDirectory}.zip";
 
-            await LogAsync($"Uploading artifacts directory ({GetRoughSizeString(ms.Length)}) ...");
-            var artifactsBlob = PersistentStateClient.GetBlobClient("runtime-artifacts-main.zip");
-            await artifactsBlob.UploadAsync(ms, overwrite: true, JobTimeout);
-        }
-        catch (Exception ex)
+        Directory.CreateDirectory(ArtifactsDirectory);
+        await RunProcessAsync("cp", $"-r runtime/artifacts/. {ArtifactsDirectory}");
+
+        PendingTasks.Enqueue(Task.Run(async () =>
         {
-            await LogAsync($"Failed to upload artifacts: {ex}");
-        }
+            try
+            {
+                await ZipArtifactAsync(ArtifactsDirectory, ArtifactsDirectory);
+
+                await LogAsync($"Uploading artifacts directory ({GetRoughSizeString(new FileInfo(ZipFile).Length)}) ...");
+                var artifactsBlob = PersistentStateClient.GetBlobClient(ZipFile);
+                await artifactsBlob.UploadAsync(ZipFile, overwrite: true, JobTimeout);
+            }
+            catch (Exception ex)
+            {
+                await LogAsync($"Failed to upload artifacts: {ex}");
+            }
+        }));
     }
 
     private async Task<string> CollectFrameworksDiffsAsync()

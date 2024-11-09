@@ -164,7 +164,7 @@ public abstract class JobBase
         }
     }
 
-    public async Task ZipAndUploadArtifactAsync(string zipFileName, string folderPath)
+    public async Task ZipArtifactAsync(string zipFileName, string folderPath)
     {
         zipFileName = $"{zipFileName}.zip";
         string zipFilePath = Path.GetFullPath(zipFileName);
@@ -190,6 +190,13 @@ public abstract class JobBase
 
             await RunProcessAsync("zip", $"-3 -r {zipFilePath} {folderPath}", logPrefix: zipFileName, workDir: workDir, suppressOutputLogs: true);
         }
+    }
+
+    public async Task ZipAndUploadArtifactAsync(string zipFileName, string folderPath)
+    {
+        await ZipArtifactAsync(zipFileName, folderPath);
+
+        string zipFilePath = Path.GetFullPath($"{zipFileName}.zip");
 
         await UploadArtifactAsync(zipFilePath);
 
