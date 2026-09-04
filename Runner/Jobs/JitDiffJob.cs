@@ -202,13 +202,13 @@ internal sealed class JitDiffJob : JobBase
 
         bool runPatches = !job.TryGetFlag("skipRuntimePatches");
 
-        if (runPatches)
-        {
-            await RuntimePatches.ApplyPatchesAsync(job);
-        }
-
         try
         {
+            if (runPatches)
+            {
+                await RuntimePatches.ApplyPatchesAsync(job, forJitDiff: copyJitDiffBase);
+            }
+
             await job.RunProcessAsync("bash", $"build.sh {targets} -c Release {RuntimeHelpers.LibrariesExtraBuildArgs}", logPrefix: $"{branch} release", workDir: "runtime");
 
             string artifactsDirectory = $"artifacts-{branch}";

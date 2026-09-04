@@ -1,0 +1,85 @@
+diff --git a/src/coreclr/jit/compiler.cpp b/src/coreclr/jit/compiler.cpp
+--- a/src/coreclr/jit/compiler.cpp
++++ b/src/coreclr/jit/compiler.cpp
+@@ -38,11 +38,11 @@
+ bool                Compiler::s_pAltJitExcludeAssembliesListInitialized = false;
+ AssemblyNamesList2* Compiler::s_pAltJitExcludeAssembliesList            = nullptr;
+ 
+-#ifdef DEBUG
+ // static
+ bool                Compiler::s_pJitDisasmIncludeAssembliesListInitialized = false;
+ AssemblyNamesList2* Compiler::s_pJitDisasmIncludeAssembliesList            = nullptr;
+ 
++#ifdef DEBUG
+ // static
+ bool       Compiler::s_pJitFunctionFileInitialized = false;
+ MethodSet* Compiler::s_pJitMethodSet               = nullptr;
+@@ -1314,13 +1314,11 @@
+         s_pAltJitExcludeAssembliesList = nullptr;
+     }
+ 
+-#ifdef DEBUG
+     if (s_pJitDisasmIncludeAssembliesList != nullptr)
+     {
+         s_pJitDisasmIncludeAssembliesList->~AssemblyNamesList2(); // call the destructor
+         s_pJitDisasmIncludeAssembliesList = nullptr;
+     }
+-#endif // DEBUG
+ 
+ #if MEASURE_NOWAY
+     DisplayNowayAssertMap();
+@@ -2260,8 +2258,6 @@
+         }
+     }
+ 
+-#ifdef DEBUG
+-
+     // Setup assembly name list for disassembly and dump, if not already set up.
+     if (!s_pJitDisasmIncludeAssembliesListInitialized)
+     {
+@@ -2287,6 +2283,8 @@
+         }
+     }
+ 
++#ifdef DEBUG
++
+     bool altJitConfig = !pfAltJit->isEmpty();
+ 
+     bool verboseDump = false;
+@@ -2693,7 +2691,8 @@
+         s_pJitFunctionFileInitialized = true;
+     }
+ #else  // DEBUG
+-    if (JitConfig.JitDisasm().contains(info.compMethodHnd, info.compClassHnd, &info.compMethodInfo->args))
++    if (assemblyInIncludeList &&
++        JitConfig.JitDisasm().contains(info.compMethodHnd, info.compClassHnd, &info.compMethodInfo->args))
+     {
+         opts.disAsm = true;
+     }
+diff --git a/src/coreclr/jit/compiler.h b/src/coreclr/jit/compiler.h
+--- a/src/coreclr/jit/compiler.h
++++ b/src/coreclr/jit/compiler.h
+@@ -11642,10 +11642,10 @@
+     static bool                s_pAltJitExcludeAssembliesListInitialized;
+     static AssemblyNamesList2* s_pAltJitExcludeAssembliesList;
+ 
+-#ifdef DEBUG
+     static bool                s_pJitDisasmIncludeAssembliesListInitialized;
+     static AssemblyNamesList2* s_pJitDisasmIncludeAssembliesList;
+ 
++#ifdef DEBUG
+     static bool       s_pJitFunctionFileInitialized;
+     static MethodSet* s_pJitMethodSet;
+ 
+diff --git a/src/coreclr/jit/jitconfigvalues.h b/src/coreclr/jit/jitconfigvalues.h
+--- a/src/coreclr/jit/jitconfigvalues.h
++++ b/src/coreclr/jit/jitconfigvalues.h
+@@ -348,7 +348,7 @@
+ RELEASE_CONFIG_INTEGER(JitDisasmWithCodeBytes, "JitDisasmWithCodeBytes", 0)
+ 
+ // Only show JitDisasm and related info for methods from this semicolon-delimited list of assemblies.
+-CONFIG_STRING(JitDisasmAssemblies, "JitDisasmAssemblies")
++RELEASE_CONFIG_STRING(JitDisasmAssemblies, "JitDisasmAssemblies")
+ 
+ // Dump interleaved GC Info for any method disassembled.
+ CONFIG_INTEGER(JitDisasmWithGC, "JitDisasmWithGC", 0)

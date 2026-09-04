@@ -117,7 +117,7 @@ internal static partial class JitDiffUtils
 
         try
         {
-            await job.RunProcessAsync("jitutils/bin/jit-diff",
+            await job.RunProcessAsync(GetJitUtilsToolPath("jit-diff"),
                 $"diff " +
                 (debugInfo ? "--debuginfo " : "") +
                 (verbose ? "--verbose " : "") +
@@ -153,7 +153,7 @@ internal static partial class JitDiffUtils
     {
         List<string> output = [];
 
-        await job.RunProcessAsync("jitutils/bin/jit-analyze",
+        await job.RunProcessAsync(GetJitUtilsToolPath("jit-analyze"),
             $"-b {mainDirectory} -d {prDirectory} -r -c {count}",
             output,
             logPrefix: "jit-analyze",
@@ -161,6 +161,9 @@ internal static partial class JitDiffUtils
 
         return string.Join('\n', output);
     }
+
+    private static string GetJitUtilsToolPath(string name) =>
+        Path.Combine("jitutils", "bin", OperatingSystem.IsWindows() ? $"{name}.exe" : name);
 
     public static (string Description, string DasmFile, string Name)[] ParseDiffAnalyzeEntries(string diffSource, bool regressions)
     {
